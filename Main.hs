@@ -5,6 +5,7 @@ module Main where
 import           Control.Applicative       (optional, (<$>), (<*>))
 import           Data.Char                 (isSpace)
 import qualified Data.Map.Strict           as M
+import           Data.Map                  ((!))
 import           Data.Maybe                (fromMaybe)
 import qualified Data.Set                  as S
 import qualified Data.Text                 as T
@@ -12,7 +13,7 @@ import           Options.Applicative       (Parser, execParser, fullDesc,
                                             header, help, helper, info, long,
                                             metavar, option, progDesc, short,
                                             strOption, (<>),
-                                            some, str, argument)
+                                            many, str, argument)
 import           Options.Applicative.Types (readerAsk, readerError)
 
 
@@ -24,6 +25,7 @@ type RegionQuantities = M.Map Region Quantity
 type BugData          = (BugName, RegionQuantities)
 type Summary          = (S.Set Region, M.Map BugName RegionQuantities)
 type Frequencies      = M.Map Quantity Int
+type States           = M.Map Region Int
 
 
 data Task = CSV | Quantities | Risks deriving Eq
@@ -55,7 +57,7 @@ opts = Config
     <> short 'a'
     <> metavar "CSV_FILE"
     <> help "append to the existing CSV"))
-  <*> some (argument str
+  <*> many (argument str
       (metavar "FILES..."))
   where
     taskOption = readerAsk
@@ -84,16 +86,18 @@ main = do
 
   case task' of
     CSV        -> printCSV summary
-    Quantities -> do fs <- loadFrequencies
+    Quantities -> do fs <- loadMapping "Frequencies.txt"
                      printQuantities fs summary
-    Risks      -> printRisks summary
+    Risks      -> do fs <- loadMapping "Frequencies.txt"
+                     states <- loadMapping "States.txt"
+                     printRisks fs states summary
 
 
 {- machineria -}
 
-loadFrequencies :: IO Frequencies
-loadFrequencies = readFile "Frequencies.txt"
-              >>= return . M.fromList . map mkPair . lines
+loadMapping :: String -> IO (M.Map T.Text Int)
+loadMapping fname = readFile fname
+                    >>= return . M.fromList . map mkPair . lines
   where mkPair x = let (i, s) = break isSpace x
                    in  (T.strip $ T.pack s, read i :: Int)
 
@@ -138,23 +142,29 @@ printCSV (regionSet, regQsByBug) =
 
 
 printQuantities :: Frequencies -> Summary -> IO ()
-printQuantities fsm (regionSet, qsm) =
+printQuantities freqMap (regionSet, qsm) =
   let regs = S.toList regionSet
   in  mapM_ (\x -> do putStr $ (T.unpack x) ++ ";"
                       print (mkRow x qsm)) regs
   where
-    mkRow reg = sum . map (maybe 0 qtyToInt . M.lookup reg . snd) . M.toList
-    qtyToInt q = fromMaybe
-                   (error $ "Unknown quantity: \"" ++ T.unpack q ++ "\"!")
-               $ M.lookup q fsm
+    mkRow reg = sum
+              . map (maybe 0 (freqMap !) . M.lookup reg . snd)
+              . M.toList
 
 
-printRisks :: Summary -> IO ()
-printRisks = undefined
+printRisks :: Frequencies -> States -> Summary -> IO ()
+printRisks freqMap regMap (_, qsm) = mapM_ (putStrLn . mkRow) $ M.toList qsm
+  where
+    mkRow (bugName, qtyMap) =
+      T.unpack bugName ++ ";" ++ show (sum prods)
+      where
+        prods = map prod $ M.toList qtyMap
+        prod (reg, qty) = (freqMap ! qty) * (regMap ! reg)
 
 
 emptySummary :: Summary
 emptySummary = (S.empty, M.empty)
+
 
 collectSummary :: BugData -> Summary -> Summary
 collectSummary (bugName, regQs) (regionSet, regQsByBug) =
