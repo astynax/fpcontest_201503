@@ -30,9 +30,9 @@ type States           = M.Map Region Int
 
 data Task = CSV | Quantities | Risks deriving Eq
 
-data Config = Config { task     :: Maybe Task
-                     , appendTo :: Maybe String
-                     , fnames   :: [String] } deriving Eq
+data Config = Config { task       :: Maybe Task
+                     , importFrom :: Maybe String
+                     , fnames     :: [String] } deriving Eq
 
 
 {- Command Line Interface -}
@@ -53,10 +53,10 @@ opts = Config
     <> short 't'
     <> help "what to do: (c[sv] | q[uantities] | r[isks])"))
   <*> optional (strOption
-      (long "append-to"
-    <> short 'a'
+      (long "import"
+    <> short 'i'
     <> metavar "CSV_FILE"
-    <> help "append to the existing CSV"))
+    <> help "import initital data from existing CSV-file"))
   <*> many (argument str
       (metavar "FILES..."))
   where
@@ -74,10 +74,10 @@ opts = Config
 
 main :: IO ()
 main = do
-  Config mbTask mbAppendTo fileNames <- cli
+  Config mbTask mbImportFrom fileNames <- cli
   initialSummary <- maybe (return emptySummary)
                           ((>>= return . parseSummary) . readFile)
-                          mbAppendTo
+                          mbImportFrom
   raws <- mapM readFile fileNames
 
   let cards = map parseCard raws
