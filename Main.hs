@@ -5,16 +5,16 @@ module Main where
 import           Control.Applicative       (optional, (<$>), (<*>))
 import           Control.Monad             (liftM)
 import           Data.Char                 (isSpace)
-import qualified Data.Map.Strict           as M
 import           Data.Map                  ((!))
+import qualified Data.Map.Strict           as M
 import           Data.Maybe                (fromMaybe)
 import qualified Data.Set                  as S
 import qualified Data.Text                 as T
-import           Options.Applicative       (Parser, execParser, fullDesc,
-                                            header, help, helper, info, long,
-                                            metavar, option, progDesc, short,
-                                            strOption, (<>),
-                                            many, str, argument)
+import           Options.Applicative       (Parser, argument, execParser,
+                                            fullDesc, header, help, helper,
+                                            info, long, many, metavar, option,
+                                            progDesc, short, str, strOption,
+                                            (<>))
 import           Options.Applicative.Types (readerAsk, readerError)
 
 
