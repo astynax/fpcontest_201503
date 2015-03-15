@@ -3,6 +3,7 @@
 module Main where
 
 import           Control.Applicative       (optional, (<$>), (<*>))
+import           Control.Monad             (liftM)
 import           Data.Char                 (isSpace)
 import qualified Data.Map.Strict           as M
 import           Data.Map                  ((!))
@@ -96,8 +97,8 @@ main = do
 {- machineria -}
 
 loadMapping :: String -> IO (M.Map T.Text Int)
-loadMapping fname = readFile fname
-                    >>= return . M.fromList . map mkPair . lines
+loadMapping fname = liftM (M.fromList . map mkPair . lines)
+                          (readFile fname)
   where mkPair x = let (i, s) = break isSpace x
                    in  (T.strip $ T.pack s, read i :: Int)
 
@@ -114,8 +115,8 @@ parseSummary s =
       where
         put (_,   "-") m = m
         put (bug, qty) m =
-          M.alter (maybe (Just $ M.singleton reg qty)
-                         (Just . M.insert    reg qty)) bug m
+          M.alter (Just . maybe (M.singleton reg qty)
+                                (M.insert    reg qty)) bug m
 
 parseCard :: String -> BugData
 parseCard content =
@@ -124,7 +125,7 @@ parseCard content =
   in  (bugName, quantities)
   where
     collect r m = let (qnt:regs:_) = split ":" r
-                  in  foldr (flip M.insert qnt) m (split "," regs)
+                  in  foldr (`M.insert` qnt) m (split "," regs)
 
 
 printCSV :: Summary -> IO ()
@@ -133,18 +134,18 @@ printCSV (regionSet, regQsByBug) =
       bugs = M.keys regQsByBug
       rows = map (T.unpack . T.intercalate ";")
            $ ( "Регион" : bugs )
-           : ( map (flip regionRow bugs) regions )
+             : map (`regionRow` bugs) regions
   in  mapM_ putStrLn rows
   where
     regionRow :: T.Text -> [T.Text] -> [T.Text]
     regionRow r = (r :) . map (get r)
-    get r b = maybe "-" id $ M.lookup b regQsByBug >>= M.lookup r
+    get r b = fromMaybe "-" $ M.lookup b regQsByBug >>= M.lookup r
 
 
 printQuantities :: Frequencies -> Summary -> IO ()
 printQuantities freqMap (regionSet, qsm) =
   let regs = S.toList regionSet
-  in  mapM_ (\x -> do putStr $ (T.unpack x) ++ ";"
+  in  mapM_ (\x -> do putStr $ T.unpack x ++ ";"
                       print (mkRow x qsm)) regs
   where
     mkRow reg = sum
